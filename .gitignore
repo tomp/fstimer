@@ -1,3 +1,14 @@
 *.pyc
 *~
 *.swp
+
+nohup.out
+log.txt
+
+xc*
+g34*
+g56*
+g78*
+fun*
+roster*
+
