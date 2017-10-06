@@ -31,6 +31,7 @@ class CompilationWin(Gtk.Window):
         '''Builds and display the compilation window'''
         super(CompilationWin, self).__init__(Gtk.WindowType.TOPLEVEL)
         self.path = path
+        self.project = os.path.basename(path)
         self.merge_cb = merge_cb
         self.modify_bg(Gtk.StateType.NORMAL, fstimer.gui.bgcolor)
         fname = os.path.abspath(
@@ -38,11 +39,12 @@ class CompilationWin(Gtk.Window):
                 os.path.dirname(os.path.abspath(__file__)),
                 '../data/icon.png'))
         self.set_icon_from_file(fname)
-        self.set_title('fsTimer - ' + os.path.basename(path))
+        self.set_title('fsTimer - ' + self.project)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.connect('delete_event', lambda b, jnk: self.hide())
         self.set_border_width(10)
         self.set_size_request(600, 450)
+
         # We will use a liststore to hold the filenames of the
         # registrations to be merged, and put the liststore in a scrolledwindow
         compregsw = Gtk.ScrolledWindow()
@@ -56,50 +58,63 @@ class CompilationWin(Gtk.Window):
         self.comptreeview.append_column(column)
         self.comptreeview.set_model(self.reglist)
         compregsw.add(self.comptreeview)
+
         # We have text below the window to explain what is happening during merging
         self.comblabel = []
         for i in range(3):
             label = Gtk.Label(label='')
             label.set_alignment(0, 0.5)
             self.comblabel.append(label)
+
         # Pack it all
         regvbox1 = Gtk.VBox(False, 8)
-        regvbox1.pack_start(Gtk.Label('Select all of the registration files to compile', True, True, 0), False, False, 0)
+        regvbox1.pack_start(Gtk.Label('Select all of the registration files to compile',
+            True, True, 0), False, False, 0)
         regvbox1.pack_start(compregsw, True, True, 0)
         for i in range(3):
             regvbox1.pack_start(self.comblabel[i], False, False, 0)
         vbox1align = Gtk.Alignment.new(0, 0, 1, 1)
         vbox1align.add(regvbox1)
         # The buttons in a table
+
         regtable = Gtk.Table(2, 1, False)
         regtable.set_row_spacings(5)
         regtable.set_col_spacings(5)
         regtable.set_border_width(5)
+
         btnREMOVE = GtkStockButton('remove','Remove')
         btnREMOVE.connect('clicked', self.rm_clicked)
+
         btnADD = GtkStockButton('add','Add')
         btnADD.connect('clicked', self.add_clicked)
+
         btnMERGE = Gtk.Button('Compile')
         btnMERGE.connect('clicked', self.merge_clicked)
+
         btnOK = GtkStockButton('close','Close')
         btnOK.connect('clicked', lambda jnk: self.hide())
+
         vsubbox = Gtk.VBox(False, 8)
         vsubbox.pack_start(btnMERGE, False, False, 0)
         vsubbox.pack_start(btnOK, False, False, 0)
+
         regvspacer = Gtk.Alignment.new(1, 1, 0, 0)
         regvspacer.add(vsubbox)
         regtable.attach(regvspacer, 0, 1, 1, 2)
+
         regvbox2 = Gtk.VBox(False, 8)
         regvbox2.pack_start(btnREMOVE, False, False, 0)
         regvbox2.pack_start(btnADD, False, False, 0)
         regvbalign = Gtk.Alignment.new(1, 0, 0, 0)
         regvbalign.add(regvbox2)
         regtable.attach(regvbalign, 0, 1, 0, 1)
+
         reghbox = Gtk.HBox(False, 8)
         reghbox.pack_start(vbox1align, True, True, 0)
         reghbox.pack_start(regtable, False, False, 0)
-        #Add and show
         self.add(reghbox)
+
+        #Add and show
         self.show_all()
 
     def rm_clicked(self, jnk_unused):
@@ -112,7 +127,11 @@ class CompilationWin(Gtk.Window):
 
     def add_clicked(self, jnk_unused):
         '''Handling click on Add button, using a FileChooser'''
-        chooser = Gtk.FileChooserDialog(title='Select registration files', parent=self, action=Gtk.FileChooserAction.OPEN, buttons=('Cancel', Gtk.ResponseType.CANCEL, 'Add', Gtk.ResponseType.OK))
+        chooser = Gtk.FileChooserDialog(title='Select registration files',
+                                        parent=self,
+                                        action=Gtk.FileChooserAction.OPEN,
+                                        buttons=('Cancel', Gtk.ResponseType.CANCEL,
+                                                 'Add', Gtk.ResponseType.OK))
         chooser.set_select_multiple(True)
         ffilter = Gtk.FileFilter()
         ffilter.set_name('Registration files')
@@ -130,7 +149,8 @@ class CompilationWin(Gtk.Window):
         '''Handling click on Merge button'''
         # Grab all of the filenames from the liststore
         filenames = []
-        self.reglist.foreach(lambda model, gtkpath, titer: filenames.append(model.get_value(titer, 0)))
+        self.reglist.foreach(lambda model, gtkpath,
+                titer: filenames.append(model.get_value(titer, 0)))
         self.merge_cb(filenames)
 
     def resetLabels(self):

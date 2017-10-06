@@ -19,13 +19,19 @@
 #The author/copyright holder can be contacted at bletham@gmail.com
 
 '''Main class of the fsTimer package'''
-
-import logging
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
-import os, json, csv, re, datetime
+
+import os
+import json
+import csv
+import re
+import datetime
 from os.path import normpath, join, dirname, abspath, basename
+from collections import defaultdict
+import logging
+
 import fstimer.gui.intro
 import fstimer.gui.newproject
 import fstimer.gui.projecttype
@@ -43,7 +49,6 @@ import fstimer.gui.compileerrors
 import fstimer.gui.pretime
 import fstimer.gui.timing
 from fstimer.printer.formatter import print_startsheets
-from collections import defaultdict
 from fstimer.gui.util_classes import MsgDialog
 
 
@@ -54,13 +59,16 @@ class PyTimer(object):
         '''constructor method. Displays top level window'''
         self.introwin = fstimer.gui.intro.IntroWin(self.load_project,
                                                    self.create_project)
+        self.datadir = abspath(join(dirname(abspath(__file__)), 'data'))
+        self.rootdir = abspath(dirname(dirname(abspath(__file__))))
 
     def load_project(self, jnk_unused, combobox, projectlist):
-        '''Loads the registration settings of a project, and go back to rootwin'''
-        projectname = projectlist[combobox.get_active()]
-        self.path = normpath(join(dirname(dirname(abspath(__file__))), projectname))
+        '''Load the registration settings of a project, and reload the rootwin'''
+        self.project = projectlist[combobox.get_active()]
+        self.path = normpath(join(self.rootdir, self.project))
+
         #self.path is now _absolute_, it is not project name.
-        with open(join(self.path, projectname + '.reg'), 'r', encoding='utf-8') as fin:
+        with open(join(self.path, self.project + '.reg'), 'r', encoding='utf-8') as fin:
             regdata = json.load(fin)
         #Assign all of the project settings
         self.fields = regdata['fields']
@@ -114,18 +122,17 @@ class PyTimer(object):
     def set_projecttype(self, projectname, projectlist, combobox):
         '''creates a new project'''
         self.project_types = ['standard', 'handicap'] #Options for project types
+        self.project = projectname
+
         #First load in the project settings
         indx = combobox.get_active()
         if indx == 0:
             # Default settings
-            fname = os.path.abspath(
-            os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                'data/fstimer_default_project.reg'))
+            fname = join(self.datadir, 'fstimer_default_project.reg')
         else:
             importname = projectlist[indx]
-            importpath = normpath(join(dirname(dirname(abspath(__file__))), importname))
-            fname = os.path.join(importpath, importname+'.reg')
+            importpath = normpath(join(self.rootdir, importname))
+            fname = join(importpath, importname + '.reg')
         with open(fname, 'r', encoding='utf-8') as fin:
             regdata = json.load(fin)
         #Assign all of the project settings
@@ -154,7 +161,7 @@ class PyTimer(object):
             self.printfields = regdata['printfields']
         except KeyError:
             self.printfields = {}
-        self.path = normpath(join(dirname(dirname(abspath(__file__))), projectname))
+        self.path = normpath(join(self.rootdir, self.project))
         self.projecttypewin = fstimer.gui.projecttype.ProjectTypeWin(self.project_types,
                                                                      self.projecttype,
                                                                      self.numlaps,
@@ -321,7 +328,8 @@ class PyTimer(object):
         parent_win = self.rootwin if edit else self.introwin
         self.printfieldswin.hide()
         self.rankingswin = fstimer.gui.definerankings.RankingsWin(
-            self.rankings, self.divisions, self.printfields, self.back_to_printfields, self.store_new_project, parent_win, edit)
+            self.rankings, self.divisions, self.printfields,
+            self.back_to_printfields, self.store_new_project, parent_win, edit)
 
     def back_to_printfields(self, jnk_unused):
         '''Goes back to define fields window from the family reset one'''
@@ -345,14 +353,18 @@ class PyTimer(object):
         regdata['rankings'] = self.rankings
         logger.debug(regdata)
         os.makedirs(self.path, exist_ok=True)
-        with open(join(self.path, basename(self.path)+'.reg'), 'w', encoding='utf-8') as fout:
-            json.dump(regdata, fout)
+        with open(join(self.path, self.project + '.reg'), 'w', encoding='utf-8') as fout:
+            json.dump(regdata, fout, indent=4)
+
         if edit:
-            md = MsgDialog(self.rankingswin, 'information', ['ok'], 'Edited!', 'Project '+basename(self.path)+' successfully edited!')
+            md = MsgDialog(self.rankingswin, 'information', ['ok'], 'Edited!',
+                    'Project {} successfully edited!'.format(self.project))
         else:
-            md = MsgDialog(self.rankingswin, 'information', ['ok'], 'Created!', 'Project '+basename(self.path)+' successfully created!')
+            md = MsgDialog(self.rankingswin, 'information', ['ok'], 'Created!',
+                    'Project {} successfully created!'.format(self.project))
         md.run()
         md.destroy()
+
         self.rankingswin.hide()
         if not edit:
             self.introwin.hide()
@@ -370,11 +382,13 @@ class PyTimer(object):
 
     def import_prereg(self, jnk_unused):
         '''import pre-registration from a csv'''
-        self.importpreregwin = fstimer.gui.importprereg.ImportPreRegWin(self.path, self.fields, self.fieldsdic)
+        self.importpreregwin = fstimer.gui.importprereg.ImportPreRegWin(
+                self.path, self.fields, self.fieldsdic)
 
     def handle_preregistration(self, jnk_unused):
         '''handles preregistration'''
-        self.preregistrationwin = fstimer.gui.preregister.PreRegistrationWin(self.path, self.set_registration_file, self.handle_registration)
+        self.preregistrationwin = fstimer.gui.preregister.PreRegistrationWin(
+                self.path, self.set_registration_file, self.handle_registration)
 
     def set_registration_file(self, filename):
         '''set a preregistration file'''
@@ -387,13 +401,14 @@ class PyTimer(object):
         self.regid = regid
         if not hasattr(self, 'prereg'):
             self.prereg = [] #No pre-registration was selected
-        self.registrationwin = fstimer.gui.register.RegistrationWin(self.path, self.fields, self.fieldsdic, self.prereg, self.projecttype, self.save_registration)
+        self.registrationwin = fstimer.gui.register.RegistrationWin(self.path,
+                self.fields, self.fieldsdic, self.prereg, self.projecttype, self.save_registration)
 
     def save_registration(self):
         '''saves registration'''
-        filename = os.path.join(self.path, basename(self.path)+'_registration_'+str(self.regid)+'.json')
+        filename = join(self.path, '{}_registration_{}.json'.format(self.project, self.regid))
         with open(filename, 'w', encoding='utf-8') as fout:
-            json.dump(self.prereg, fout)
+            json.dump(self.prereg, fout, indent=4)
         return filename, True
 
     def compreg_window(self, jnk_unused):
@@ -401,16 +416,19 @@ class PyTimer(object):
         self.compilewin = fstimer.gui.compile.CompilationWin(self.path, self.merge_compreg)
 
     def merge_compreg(self, regfilelist):
-        '''Merges the given registration files
-           Loads all given json files and merge.
-           Also creates a timing dictionary, which is a dictionary with IDs as keys.
-           Finally, checks for errors'''
+        '''Merge the given registration files.
+           The merged entries are written to a single "compiled" registration
+           file.  A "timing dictionary" is also written; this contains the same
+           information as the compiled registration file, but indexed by ID.
+           '''
         if not regfilelist:
             # case of an empty list : nothing to be done
             return
+
         # Use labels to keep track of the status.
         self.compilewin.resetLabels()
         self.compilewin.setLabel(0, '<span color="blue">Combining registrations...</span>')
+
         # This will be a list of the merged registrations
         # each registration is a list of dictionaries
         self.regmerge = []
@@ -418,11 +436,14 @@ class PyTimer(object):
             with open(fname, 'r', encoding='utf-8') as fin:
                 reglist = json.load(fin)
             self.regmerge.extend(reglist)
+
         # Now remove trivial dups
         self.reg_nodups0 = [dict(tupleized) for tupleized in set(
             tuple((field, item[field]) for field in self.fields) for item in self.regmerge)]
-        # Get rid of entries that differ only by the ID. That is, items that were in the pre-reg and had no changes except an ID was assigned in one reg file.
-        # we'll do this in O(n^2) time:-(
+
+        # Get rid of entries that differ only by the ID. That is, items that
+        # were in the pre-reg and had no changes except an ID was assigned in
+        # one reg file.  We'll do this in O(n^2) time :-(
         self.reg_nodups = []
         for reg in self.reg_nodups0:
             if reg['ID']:
@@ -440,10 +461,13 @@ class PyTimer(object):
                             break
                 if not dupcheck:
                     self.reg_nodups.append(reg)
+
         # Now form the Timing dictionary, and check for errors.
         self.compilewin.setLabel(1, '<span color="blue">Checking for errors...</span>')
+
         # the timing dictionary. keys are IDs, values are registration dictionaries
         self.timedict = {}
+
         # the errors dictionary. keys are IDs, values are a list registration dictionaries with that ID
         self.errors = {}
         for reg in self.reg_nodups:
@@ -457,6 +481,7 @@ class PyTimer(object):
                     self.errors[reg['ID']].append(reg)
                 else:
                     self.timedict[reg['ID']] = reg
+
         # If there are errors, we must correct them
         if self.errors:
             self.compilewin.setLabel(1, '<span color="blue">Checking for errors...</span> <span color="red">Errors found!</span>')
@@ -474,19 +499,19 @@ class PyTimer(object):
         else:
             self.compilewin.setLabel(1, '<span color="blue">Checking for errors... no errors found!</span>')
         #Now save things
-        regfn = join(self.path, basename(self.path) + '_registration_compiled.json')
-        timefn = join(self.path, basename(self.path) + '_timing_dict.json')
+        regfn = join(self.path, self.project + '_registration_compiled.json')
+        timefn = join(self.path, self.project + '_timing_dict.json')
         with open(regfn, 'w', encoding='utf-8') as fout:
-            json.dump(self.reg_nodups, fout)
+            json.dump(self.reg_nodups, fout, indent=4)
         with open(timefn, 'w', encoding='utf-8') as fout:
-            json.dump(self.timedict, fout)
+            json.dump(self.timedict, fout, indent=4)
         print_startsheets(self, use_csv=False)
         self.compilewin.setLabel(
             2,
             '<span color="blue">Successfully wrote files:\n' + regfn + '\n' +
             timefn + '\n\nStart sheets written to html.\n </span>')
         #And write the compiled registration to csv
-        with open(join(self.path, basename(self.path)+'_registration.csv'), 'w', encoding='utf-8') as fout:
+        with open(join(self.path, self.project + '_registration.csv'), 'w', encoding='utf-8') as fout:
             dict_writer = csv.DictWriter(fout, self.fields)
             dict_writer.writer.writerow(self.fields)
             dict_writer.writerows(self.reg_nodups)
@@ -500,20 +525,23 @@ class PyTimer(object):
     def gen_timewin(self, passid, timebtn):
         '''The actual timing'''
         self.passid = passid
+
         # we're done with pretiming
         self.pretimewin.hide()
+
         # We will store 'raw' data, lists of times and IDs.
         self.rawtimes = {'times':[], 'ids':[]}
+
         # create Timing window
         self.timewin = fstimer.gui.timing.TimingWin(self, timebtn)
 
     def write_updated_timing(self, reg, timedict):
-        filename = os.path.join(self.path, os.path.basename(self.path)+'_registration_compiled.json')
+        filename = join(self.path, self.project + '_registration_compiled.json')
         with open(filename, 'w', encoding='utf-8') as fout:
-            json.dump(reg, fout)
-        with open(join(self.path, basename(self.path)+'_timing_dict.json'), 'w', encoding='utf-8') as fout:
-            json.dump(timedict, fout)
-        with open(join(self.path, basename(self.path)+'_registration.csv'), 'w', encoding='utf-8') as fout:
+            json.dump(reg, fout, indent=4)
+        with open(join(self.path, self.project + '_timing_dict.json'), 'w', encoding='utf-8') as fout:
+            json.dump(timedict, fout, indent=4)
+        with open(join(self.path, self.project + '_registration.csv'), 'w', encoding='utf-8') as fout:
             dict_writer = csv.DictWriter(fout, self.fields)
             dict_writer.writer.writerow(self.fields)
             dict_writer.writerows(reg)

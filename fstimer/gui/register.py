@@ -29,13 +29,14 @@ from fstimer.gui.util_classes import GtkStockButton
 class RegistrationWin(Gtk.Window):
     '''Handling of the window dedicated to registration'''
 
-    def __init__(self, path, fields, fieldsdic, prereg, projecttype, save_registration_cb, parent_win=None,
-                 autosave=True, save_label=''):
-        '''Builds and display the registration window'''
+    def __init__(self, path, fields, fieldsdic, prereg, projecttype,
+            save_registration_cb, parent_win=None, autosave=True, save_label=''):
+        '''Construct and display the registration window.'''
         super(RegistrationWin, self).__init__(Gtk.WindowType.TOPLEVEL)
         if parent_win:
             self.set_transient_for(parent_win)
             self.set_modal(True)
+        self.project = os.path.basename(path)
         self.fields = fields
         self.fieldsdic = fieldsdic
         self.prereg = prereg
@@ -45,6 +46,7 @@ class RegistrationWin(Gtk.Window):
         self.autosave = autosave
         self.editreg_win = None
         self.editregfields = None
+
         # First we define the registration model.
         # We will setup a liststore that is wrapped in a treemodelfilter
         # that is wrapped in a treemodelsort that is put in a treeview
@@ -53,21 +55,25 @@ class RegistrationWin(Gtk.Window):
         self.modelfilter = self.regmodel.filter_new()
         self.modelfiltersorted = Gtk.TreeModelSort(self.modelfilter)
         self.treeview = Gtk.TreeView()
+
         # Now we define each column in the treeview
         for (colid, field) in enumerate(fields):
             column = Gtk.TreeViewColumn(field, Gtk.CellRendererText(), text=colid)
             column.set_sort_column_id(colid)
             self.treeview.append_column(column)
+
         # Now we populate the model with the pre-registration info, if any
         for reg in prereg:
             self.regmodel.append([reg[field] for field in fields])
             if reg['ID']:
                 self.ids.add(reg['ID'])
+
         # This is the string that we filter based on.
         self.searchstr = ''
         self.modelfilter.set_visible_func(self.visible_filter)
         self.treeview.set_model(self.modelfiltersorted)
         self.treeview.set_enable_search(False)
+
         # Now let us actually build the window
         self.modify_bg(Gtk.StateType.NORMAL, fstimer.gui.bgcolor)
         fname = os.path.abspath(
@@ -75,11 +81,12 @@ class RegistrationWin(Gtk.Window):
                 os.path.dirname(os.path.abspath(__file__)),
                 '../data/icon.png'))
         self.set_icon_from_file(fname)
-        self.set_title('fsTimer - ' + os.path.basename(path))
+        self.set_title('fsTimer - ' + self.project)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.connect('delete_event', lambda b, jnk: self.close_clicked(jnk))
         self.set_border_width(10)
         self.set_size_request(850, 450)
+
         #Now the filter entrybox
         filterbox = Gtk.HBox(False, 8)
         filterbox.pack_start(Gtk.Label('Filter by ', True, True, 0), False, False, 0)
@@ -97,13 +104,16 @@ class RegistrationWin(Gtk.Window):
         self.filterbtnCLEAR.set_sensitive(False)
         filterbox.pack_start(self.filterentry, False, False, 0)
         filterbox.pack_start(self.filterbtnCLEAR, False, False, 0)
+
         # Now the scrolled window that contains the treeview
         regsw = Gtk.ScrolledWindow()
         regsw.set_shadow_type(Gtk.ShadowType.ETCHED_IN)
         regsw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         regsw.add(self.treeview)
+
         # And a message that says if we have saved or not.
         self.regstatus = Gtk.Label(label=save_label)
+
         # Some boxes for all the stuff on the left
         regvbox1 = Gtk.VBox(False, 8)
         regvbox1.pack_start(filterbox, False, False, 0)
@@ -111,26 +121,35 @@ class RegistrationWin(Gtk.Window):
         regvbox1.pack_start(self.regstatus, False, False, 0)
         vbox1align = Gtk.Alignment.new(0, 0, 1, 1)
         vbox1align.add(regvbox1)
+
         # And boxes/table for the buttons on the right
         regtable = Gtk.Table(2, 1, False)
         regtable.set_row_spacings(5)
         regtable.set_col_spacings(5)
         regtable.set_border_width(5)
+
         btnEDIT = GtkStockButton('edit',"Edit")
         btnEDIT.connect('clicked', self.edit_clicked)
+
         btnREMOVE = GtkStockButton('remove',"Remove")
         btnREMOVE.connect('clicked', self.rm_clicked)
+
         btnNEW = GtkStockButton('new',"New")
         btnNEW.connect('clicked', self.new_clicked)
+
         btnSAVE = GtkStockButton('save',"Save")
         btnSAVE.connect('clicked', self.save_clicked)
+
         btnOK = GtkStockButton('close',"Close")
         btnOK.connect('clicked', self.close_clicked)
+
         vsubbox = Gtk.VBox(False, 8)
         vsubbox.pack_start(btnSAVE, False, False, 0)
+
         regvspacer = Gtk.Alignment.new(1, 1, 0, 0)
         regvspacer.add(vsubbox)
         regtable.attach(regvspacer, 0, 1, 1, 2)
+
         regvbox2 = Gtk.VBox(False, 8)
         regvbox2.pack_start(btnNEW, False, False, 0)
         regvbox2.pack_start(btnEDIT, False, False, 0)

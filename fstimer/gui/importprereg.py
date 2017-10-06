@@ -16,13 +16,15 @@
 
 #The author/copyright holder can be contacted at bletham@gmail.com
 '''Handling of the window dedicated to importation of pre-registration'''
+import os
+import csv
+import json
 
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
+
 import fstimer.gui
-import os, csv, json
-import datetime
 from fstimer.gui.util_classes import GtkStockButton
 
 class ComboValueError(Exception):
@@ -36,6 +38,7 @@ class ImportPreRegWin(Gtk.Window):
         '''Builds and display the importation window'''
         super(ImportPreRegWin, self).__init__(Gtk.WindowType.TOPLEVEL)
         self.path = path
+        self.project = os.path.basename(self.path)
         self.fields = fields
         self.fieldsdic = fieldsdic
         self.modify_bg(Gtk.StateType.NORMAL, fstimer.gui.bgcolor)
@@ -44,7 +47,7 @@ class ImportPreRegWin(Gtk.Window):
                 os.path.dirname(os.path.abspath(__file__)),
                 '../data/icon.png'))
         self.set_icon_from_file(fname)
-        self.set_title('fsTimer - ' + os.path.basename(path))
+        self.set_title('fsTimer - ' + self.project)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.connect('delete_event', lambda b, jnk: self.hide())
         self.set_border_width(10)
@@ -105,21 +108,26 @@ class ImportPreRegWin(Gtk.Window):
         self.advancedwin.set_border_width(20)
         self.advancedwin.set_size_request(600, 400)
         self.advancedwin.connect('delete_event', lambda b, jnk_unused: self.advancedwin.hide())
+
         # top label
         toplabel = Gtk.Label("For each field, specify the corresponding CSV column.\n")
         # Treeview with 3 columns : field, combobox and free text
         self.fieldview = Gtk.TreeView()
         self.fieldview.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
+
         # Associated model with 5 columns : the 4th one is a boolean indicating
         # whether the 3rd one (Advanced mapping) should be sensitive
         self.fieldsmodel = Gtk.ListStore(str, str, str, bool)
         for field in self.fields:
-            self.fieldsmodel.append([field, field if field in csv_fields else '-- select --', '', False])
+            self.fieldsmodel.append([field,
+                field if field in csv_fields else '-- select --', '', False])
         self.fieldview.set_model(self.fieldsmodel)
+
         # build first column (project field)
         column = Gtk.TreeViewColumn('Field', Gtk.CellRendererText(), text=0)
         self.fieldview.append_column(column)
-        # vuild 2nd column (csv field to be used, as a combo box)
+
+        # build 2nd column (csv field to be used, as a combo box)
         combo_renderer = Gtk.CellRendererCombo()
         liststore_csv_fields = Gtk.ListStore(str)
         liststore_csv_fields.append(['-- Leave empty --'])
@@ -132,13 +140,17 @@ class ImportPreRegWin(Gtk.Window):
         combo_renderer.set_property("has-entry", False)
         column = Gtk.TreeViewColumn('CSV column', combo_renderer, text=1)
         self.fieldview.append_column(column)
+
         # build the 3rd column (Advanced mapping)
         advanced_renderer = Gtk.CellRendererText()
-        column = Gtk.TreeViewColumn('Advanced mapping', advanced_renderer, text=2, sensitive=3, editable=3)
+        column = Gtk.TreeViewColumn('Advanced mapping', advanced_renderer,
+                text=2, sensitive=3, editable=3)
         self.fieldview.append_column(column)
+
         # handler for the combo changes
         combo_renderer.connect("edited", self.combo_changed)
         advanced_renderer.connect("edited", self.text_changed)
+
         # And put it in a scrolled window, in an alignment
         fieldsw = Gtk.ScrolledWindow()
         fieldsw.set_shadow_type(Gtk.ShadowType.ETCHED_IN)
@@ -146,6 +158,7 @@ class ImportPreRegWin(Gtk.Window):
         fieldsw.add(self.fieldview)
         fieldalgn = Gtk.Alignment.new(0, 0, 1, 1)
         fieldalgn.add(fieldsw)
+
         # a text buffer for errors
         textbuffer2 = Gtk.TextBuffer()
         try:
@@ -157,6 +170,7 @@ class ImportPreRegWin(Gtk.Window):
         textview.set_buffer(textbuffer2)
         textview.set_editable(False)
         textview.set_cursor_visible(False)
+
         # hbox for the buttons
         hbox = Gtk.HBox(False, 0)
         btnCANCEL = GtkStockButton('close',"Cancel")
@@ -167,6 +181,7 @@ class ImportPreRegWin(Gtk.Window):
         alignOK.add(btnOK)
         hbox.pack_start(btnCANCEL, False, True, 0)
         hbox.pack_start(alignOK, True, True, 0)
+
         # populate
         vbox = Gtk.VBox(False, 10)
         vbox.pack_start(toplabel, False, False, 0)
@@ -186,7 +201,7 @@ class ImportPreRegWin(Gtk.Window):
         '''Handles a change in the combo boxes' selections'''
         self.fieldsmodel[gtkpath][1] = text
         if text == '-- Advanced expression --':
-            if len(self.fieldsmodel[gtkpath][2]) == 0:
+            if not self.fieldsmodel[gtkpath][2]:
                 self.fieldsmodel[gtkpath][2] = '-- enter python expression --'
             self.fieldsmodel[gtkpath][3] = True
         else:
@@ -204,9 +219,10 @@ class ImportPreRegWin(Gtk.Window):
             field = self.fieldsmodel[gtkpath][0]
             csv_col = self.fieldsmodel[gtkpath][1]
             if csv_col == '-- select --':
-                textbuffer2.insert_with_tags_by_name(textbuffer2.get_end_iter(), 'Nothing selected for field %s' % field, 'red')
+                textbuffer2.insert_with_tags_by_name(textbuffer2.get_end_iter(),
+                        'Nothing selected for field %s' % field, 'red')
                 return
-            elif csv_col == '-- Leave empty --' or csv_col == None:
+            elif csv_col == '-- Leave empty --' or csv_col is None:
                 self.fields_mapping[field] = lambda reg, col=csv_col: ''
             elif csv_col == '-- Advanced expression --':
                 try:
@@ -214,7 +230,8 @@ class ImportPreRegWin(Gtk.Window):
                     self.fields_mapping[field] = lambda reg, code=code: eval(code)
                 except SyntaxError as e:
                     iter_end = textbuffer2.get_end_iter()
-                    textbuffer2.insert_with_tags_by_name(iter_end, 'Invalid syntax for expression of field %s: ' % field, 'red')
+                    textbuffer2.insert_with_tags_by_name(iter_end,
+                            'Invalid syntax for expression of field %s: ' % field, 'red')
                     textbuffer2.insert_with_tags_by_name(textbuffer2.get_end_iter(), str(e), 'blue')
                     return
             else:
@@ -223,25 +240,37 @@ class ImportPreRegWin(Gtk.Window):
         self.import_data(textbuffer1)
 
     def build_fields_mapping(self, csv_fields, textbuffer):
-        '''Maps cvs fields to project fields and creates a dictionnary
-           of lambdas to apply to a csv entry to extract each field.
-           Some entries may contain strings instead of lambdas, meaning
-           that the project column's value is equal to that csv column's value'''
+        '''Maps csv fields to project fields and creates a dictionary
+        of lambdas to apply to a csv entry to extract each field.
+        Some entries may contain strings instead of lambdas, meaning
+        that the project column's value is equal to that csv column's value
+        '''
         iter_end = textbuffer.get_end_iter()
-        fields_use = [field for field in csv_fields if field in self.fields]
-        textbuffer.insert_with_tags_by_name(iter_end, 'Matched csv fields: ', 'blue')
-        textbuffer.insert(iter_end, ', '.join(fields_use) + '\n')
-        fields_ignore = [field for field in csv_fields if field not in self.fields]
-        textbuffer.insert_with_tags_by_name(iter_end, 'Did not match csv fields: ', 'red')
-        textbuffer.insert(iter_end, ', '.join(fields_ignore) + '\n')
-        fields_notuse = [field for field in self.fields if field not in csv_fields]
-        textbuffer.insert_with_tags_by_name(iter_end, 'Did not find in csv: ', 'red')
-        textbuffer.insert(iter_end, ', '.join(fields_notuse) + '\n')
+
+        fields_used = [field for field in csv_fields if field in self.fields]
+        if fields_used:
+            textbuffer.insert_with_tags_by_name(iter_end, 'Matched csv fields: ', 'blue')
+            textbuffer.insert(iter_end, ', '.join(fields_used) + '\n')
+
+        fields_ignored = [field for field in csv_fields if field not in self.fields]
+        if fields_ignored:
+            textbuffer.insert_with_tags_by_name(iter_end, 'Did not match csv fields: ', 'red')
+            textbuffer.insert(iter_end, ', '.join(fields_ignored) + '\n')
+
+        fields_not_used = [field for field in self.fields if field not in csv_fields]
+        if fields_not_used:
+            textbuffer.insert_with_tags_by_name(iter_end, 'Did not find in csv: ', 'red')
+            textbuffer.insert(iter_end, ', '.join(fields_not_used) + '\n')
+
         self.propose_advanced_import(csv_fields, textbuffer)
 
     def select_preregistration(self, jnk_unused, textbuffer):
         '''Handle selection of a pre-reg file using a filechooser'''
-        chooser = Gtk.FileChooserDialog(title='Select pre-registration csv', parent=self, action=Gtk.FileChooserAction.OPEN, buttons=('Cancel', Gtk.ResponseType.CANCEL, 'OK', Gtk.ResponseType.OK))
+        chooser = Gtk.FileChooserDialog(title='Select pre-registration csv',
+                parent=self,
+                action=Gtk.FileChooserAction.OPEN,
+                buttons=('Cancel', Gtk.ResponseType.CANCEL,
+                         'OK', Gtk.ResponseType.OK))
         ffilter = Gtk.FileFilter()
         ffilter.set_name('csv files')
         ffilter.add_pattern('*.csv')
@@ -264,12 +293,16 @@ class ImportPreRegWin(Gtk.Window):
                 self.build_fields_mapping(csv_fields, textbuffer)
             except (IOError, IndexError, csv.Error):
                 iter_end = textbuffer.get_end_iter()
-                textbuffer.insert_with_tags_by_name(iter_end, 'Error! Could not open file, or no data found in file. Nothing was imported, try again.', 'red')
+                textbuffer.insert_with_tags_by_name(iter_end,
+                        'Error! Could not open file, or no data found in file. '
+                        'Nothing was imported, try again.', 'red')
         chooser.destroy()
 
     def import_data(self, textbuffer):
-        '''Implements the actual import of the csv data'''
-        textbuffer.insert(textbuffer.get_end_iter(), 'Importing registration data...\n')
+        '''Import the pre-registration data, previously loaded by the
+        select_preregistration() callback
+        '''
+        textbuffer.insert(textbuffer.get_end_iter(), '\nImporting registration data...\n')
         preregdata = []
         row = 1
         for reg in self.csvreg:
@@ -288,6 +321,10 @@ Correct the error and try again.""" % (row+1, value, field, optstr)
                 tmpdict[field] = value
             preregdata.append(tmpdict.copy())
             row += 1
-        with open(os.path.join(self.path, os.path.basename(self.path)+'_registration_prereg.json'), 'w', encoding='utf-8') as fout:
+        prereg_filename = self.project + '_registration_prereg.json'
+        prereg_pathname = os.path.join(self.path, prereg_filename)
+        with open(prereg_pathname, 'w', encoding='utf-8') as fout:
             json.dump(preregdata, fout)
-        textbuffer.insert_with_tags_by_name(textbuffer.get_end_iter(), 'Success! Imported pre-registration saved to '+os.path.basename(self.path)+'_registration_prereg.json\nFinished!', 'blue')
+        textbuffer.insert_with_tags_by_name(textbuffer.get_end_iter(),
+                'Success! Imported pre-registration saved to {}_registration_prereg.json\n'
+                'Finished!'.format(prereg_filename), 'blue')

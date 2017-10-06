@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 import fstimer.fslogger
-
 import fstimer.timer
-from gi.repository import Gtk
 
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
 
 def main():
     pytimer = fstimer.timer.PyTimer()
