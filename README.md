@@ -1,10 +1,10 @@
-fstimer
+xctimer
 =======
 
-Development for fsTimer, free, open source software for race timing.
+A fork of Ben Letham's fstimer project, customized for managing school cross-country meets.
 
-See fstimer.org for more information and for stable releases.
+So far, this is still just fstimer with a new name.
 
-fsTimer is written in Python3 and uses GTK3+ via PyGObject.
+See fstimer.org for more information about that project.
 
-Contact admin@fstimer.org if you would like to become a collaborator.
+xcTimer is written in Python3 and uses GTK3+ via PyGObject.
